@@ -1,0 +1,479 @@
+steps for srini
+
+train task model
+python run_jobs.py -e task_model --seeds 5 --dataset all --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+python run_jobs.py -e task_model --seeds 1 --dataset ZSRE --submit os --server 17 --gpu 3
+
+fix issues and write results again
+python run_jobs.py -e task_model --seeds 5 --dataset all --do_train false --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR 
+
+first batch
+
+python run_jobs.py -e write_LeapOfThought_preds --seeds 5 --dataset LeapOfThought --do_train false --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e write_alt_beam_preds --seeds 5 --dataset ZSRE --do_train false --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e write_alt_beam_preds --seeds 5 --dataset Wikidata5m --do_train false --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+after first batch is done
+
+python run_jobs.py -e learned_opt_k_ablation --seeds 1 --dataset ZSRE  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_label_ablation --seeds 1 --dataset ZSRE --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_eval_ablation --seeds 1 --dataset ZSRE  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset all  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset all --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset ZSRE --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_r_ablation --seeds 1 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e base_optimizers --seeds 5 --do_train false  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e base_optimizers_r_ablation --seeds 1 --do_train false  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+# redo all LeapOfThought experiments
+(0)
+set DATA_DIR env variable
+python data_utils/shuffle_leapofthought_splits.py
+(1)
+python run_jobs.py -e task_model --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+(2)
+python run_jobs.py -e write_LeapOfThought_preds --do_train false --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+(3)
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e base_optimizers_r_main --dataset LeapOfThought --seeds 5 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e base_optimizers --seeds 5 --dataset LeapOfThought --do_train false  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+
+# new ZSRE on main, r=1 (match config to r=10 experiments, based on objective tuning)
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset ZSRE --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+# r ablation overwrite FEVER (bug fixed in FEVER r=10 evaluation)
+python run_jobs.py -e base_optimizers_r_ablation --seeds 5 --dataset FEVER --do_train false  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_r_ablation --seeds 1 --do_train false  --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+
+# r10 main experiments, add seeds
+python run_jobs.py -e base_optimizers_r_main --seeds 5 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_r_main --seeds 5 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+# get de Cao for all 4 datasets
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset all --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+ --server 17 --gpu 3 -s --submit os
+
+> write leap of thought again
+python run_jobs.py -e write_LeapOfThought_preds --do_train false --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+
+> redo entire leapofthought pipeline
+python run_jobs.py -e base_optimizers_r_main --dataset LeapOfThought --seeds 5 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset LeapOfThought --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset LeapOfThought --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset LeapOfThought --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+python run_jobs.py -e learned_opt_r_main --seeds 5 --dataset LeapOfThought --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+python run_jobs.py -e base_optimizers --dataset LeapOfThought --seeds 5 --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+python run_jobs.py -e base_optimizers_r_main --dataset LeapOfThought --seeds 5 --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset LeapOfThought --submit os --server 17 --gpu 3 --overwrite_past_experiment true --do_train false
+
+> rerun this
+python run_jobs.py -e learned_opt_r_main --seeds 5 --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+# very last minute, redo zsRE with paraphrase
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset ZSRE --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+python run_jobs.py -e learned_opt_r_main --seeds 5 --dataset ZSRE --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR --overwrite_past_experiment true
+
+# aggregate data without running
+python run_jobs.py -e task_model --seeds 5 --dataset LeapOfThought --submit slurm -c true
+python run_jobs.py -e learned_opt_k_ablation --seeds 1 --dataset ZSRE  --submit slurm -c true
+python run_jobs.py -e learned_opt_label_ablation --seeds 1 --dataset ZSRE --submit slurm -c true
+python run_jobs.py -e learned_opt_eval_ablation --seeds 1 --dataset ZSRE --submit slurm -c true
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset all  --submit slurm -c true
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset Wikidata5m --submit slurm -c true
+python run_jobs.py -e learned_opt_r_ablation --seeds 1  --submit slurm -c true
+python run_jobs.py -e base_optimizers --seeds 5 --do_train false  --submit slurm -c true
+python run_jobs.py -e base_optimizers_r_main --seeds 5 --submit slurm -c true
+python run_jobs.py -e base_optimizers_r_ablation --seeds 1 --do_train false  --submit slurm -c true
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset all --submit slurm -c true
+python run_jobs.py -e learned_opt_r_main --seeds 5 --submit slurm -c true
+
+# run_jobs command
+
+> all task models
+python run_jobs.py -e task_model --seeds 5 --dataset all
+python run_jobs.py -e task_model --seeds 5 --dataset all --server 17 --submit slurm -c true 
+python run_jobs.py -e write_LeapOfThought_preds --seeds 5 --dataset LeapOfThought --do_train false
+python run_jobs.py -e write_ZSRE_alt_preds --seeds 5 --dataset ZSRE --do_train false
+
+> tune base optimizers
+python run_jobs.py -e tune_base_optimizers --do_train false --use_dev_not_test true --dataset all
+python statistical_analysis.py -e tune_base_optimizers
+
+> base optimizers across r
+python run_jobs.py -e base_optimizers_r_ablation --do_train false --gpu 3 -s --server 17
+
+> learned opt ablation k
+python run_jobs.py -e learned_opt_k_ablation --seeds 1 
+python run_jobs.py -e learned_opt_k_ablation --seeds 1 --dataset ZSRE -s --server 17 --gpu 2 --num_train_epochs 1
+
+> learned opt objective ablation
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset all 
+python run_jobs.py -e learned_opt_objective_ablation --seeds 1 --dataset Wikidata5m -s --server 17 --gpu 3
+
+> learned opt label ablation
+python run_jobs.py -e learned_opt_label_ablation --seeds 1 --dataset ZSRE
+python run_jobs.py -e learned_opt_label_ablation --seeds 1 --dataset ZSRE -s --server 17 --gpu 3 --num_train_epochs 1
+
+> learned opt main
+python run_jobs.py -e learned_opt_main --seeds 5 --dataset all
+python run_jobs.py -e learned_opt_main --seeds 1 --dataset FEVER --gpu 3 --server 17
+python statistical_analysis.py -e learned_opt_main -n 100
+
+> learned opt de cao
+python run_jobs.py -e learned_opt_de_cao --seeds 5 --dataset ZSRE
+python run_jobs.py -e learned_opt_de_cao --seeds 1 --dataset ZSRE --gpu 3 --server 17 --num_train_epochs 1 -s
+
+> postscript for FB servers + dir paths
+ --submit slurm --data_dir $DATA_DIR --save_dir $DATA_DIR --cache_dir $DATA_DIR
+
+# scp/ssh/aws/server
+
+# venv
+source /playpen-ssd/home/peter/virtual_envs/language-model-beliefs/bin/activate
+source /playpen3/home/peter/virtual_envs/language-model-beliefs/bin/activate
+cd ~/private/language-model-beliefs
+
+# upload
+
+aws s3 rm s3://language-model-beliefs/main.py
+aws s3 cp main.py s3://language-model-beliefs
+
+aws s3 sync . s3://language-model-beliefs
+aws s3 sync . s3://language-model-beliefs --delete --exclude "*.txt" --exclude "*.csv"
+aws s3 sync result_sheets s3://language-model-beliefs/result_sheets --delete --acl bucket-owner-full-control
+aws s3 sync training_reports s3://language-model-beliefs/training_reports --delete --acl bucket-owner-full-control
+
+aws s3 sync . s3://language-model-beliefs --exclude "*.txt" --exclude "*.csv"
+
+# download
+aws s3 sync s3://language-model-beliefs . 
+aws s3 sync s3://language-model-beliefs . --delete
+aws s3 sync s3://language-model-beliefs/result_sheets result_sheets --delete
+aws s3 sync s3://language-model-beliefs/training_reports training_reports --delete
+aws s3 cp s3://language-model-beliefs/main.py .
+
+aws s3 sync s3://language-model-beliefs . --delete
+
+# scp transfer between servers
+scp peter@nlp13.cs.unc.edu:/playpen3/home/peter/saved_models/experiment_bart-base_Wikidata5m_seq2seq-probe_finetuned-all_sd0.pt /playpen-ssd/home/peter/saved_models/
+scp peter@nlp13.cs.unc.edu:/playpen3/home/peter/saved_models/experiment_bart-base_ZSRE_seq2seq-probe_finetuned-all_sd0.pt /playpen-ssd/home/peter/saved_models/
+scp peter@nlp13.cs.unc.edu:/playpen3/home/peter/saved_models/experiment_roberta-base_FEVER_linear-probe_finetuned-all_sd0.pt /playpen-ssd/home/peter/saved_models/
+scp peter@nlp13.cs.unc.edu:/playpen3/home/peter/saved_models/experiment_roberta-base_LeapOfThought_linear-probe_finetuned-all_sd0.pt /playpen-ssd/home/peter/saved_models/
+
+TMPDIR=/playpen-ssd/home/peter/tmp/ pip install --cache-dir=/playpen-ssd/home/peter/tmp/ --build /playpen-ssd/home/peter/tmp/ torch==1.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
+
+> multi-gpu
+source /playpen3/home/peter/virtual_envs/language-model-beliefs/bin/activate
+cd ~/private/language-model-beliefs
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 4 --test_batch_size 4 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --update_steps 2 --num_successive_updates 2 -gaf 2 --gpu -1 -n 10000
+
+> graph writing + analysis
+
+# write preds from FEVER model
+python main.py --dataset FEVER --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --write_preds_to_file true
+
+# write graph to file, adamw 1e-6 steps 100
+python main.py --dataset FEVER --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --test_batch_size 64 --update_eval_truthfully false --fit_to_alt_labels true --update_beliefs true --optimizer adamw --lr 1e-6 --update_steps 100 --update_all_points true --write_graph_to_file true --use_dev_not_test false --num_random_other 10444 --gpu 3 --server 17 
+
+# write graph for learned opt, k5
+python main.py --dataset FEVER --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --test_batch_size 128 --update_eval_truthfully false --fit_to_alt_labels true --use_learned_optimizer true --update_parameters optimizer --divergences kl --update_steps 5 --learned_opt_steps 5 --update_all_points true -ne 10000 --num_random_other 10000 --write_graph_to_file true --use_dev_not_test false --implementation new --gpu 3 --server 17
+
+# analyze graph
+python main.py --dataset FEVER --probing_style model --probe linear --model roberta-base --seed 0 --test_batch_size 64 --update_eval_truthfully false --fit_to_alt_labels true --update_beliefs true --use_dev_not_test false --optimizer adamw --lr 1e-6 --update_steps 100 --do_train false --do_eval false --pre_eval false --do_graph_analysis true -ne 200
+
+# write LeapOfThought preds
+python main.py --dataset LeapOfThought --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --write_preds_to_file true --leapofthought_main main
+
+# write graph for LeapOfThought
+python main.py --dataset LeapOfThought --leapofthought_main main --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --test_batch_size 64 --update_eval_truthfully false --fit_to_alt_labels true --update_beliefs true --optimizer sgd --update_steps 100 --lr 1e-2 --update_all_points true --write_graph_to_file true --use_dev_not_test false --num_random_other 8642 --gpu 3
+
+# analyze graph
+python main.py --dataset LeapOfThought --leapofthought_main main --probing_style model --probe linear --model roberta-base --seed 0 --do_train false --do_eval true --test_batch_size 64 --update_eval_truthfully false --fit_to_alt_labels true --update_beliefs true --optimizer sgd --update_steps 100 --lr 1e-2 --do_train false --do_eval false --pre_eval false --do_graph_analysis true
+
+# train models
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --model roberta-base --do_train true --seed 0
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --model facebook/bart-base --do_train true --num_train_epochs 20 --seed 0
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset LeapOfThought --probing_style model --probe linear --model roberta-base --do_train true --leapofthought_main hypothesis --seed 0
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -v -u python main.py --dataset Wikidata5m --probing_style seq2seq --model facebook/bart-base --do_train true --num_train_epochs 20 --seed 0
+
+# write preds to file
+training-command :: --do_train false --write_preds_to_file true 
+training-command :: --do_train false --write_preds_to_file true --beam_search_alt_labels true
+
+# train ZSRE with their QA model
+python main.py --dataset ZSRE --probing_style seq2seq --model facebook/bart-base --do_train false --seed 0 --write_preds_to_file true --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt
+
+# train LeapOfThought their training mix
+PYTHONPATH=./:$PYTHONPATH python main.py --dataset LeapOfThought --probing_style model --probe linear --model roberta-large --do_train true --seed 2 --leapofthought_add_context always --train_batch_size 10 --test_batch_size 10 -s --gpu 1
+
+# train model w paraphrases
+python main.py --dataset ZSRE --probing_style seq2seq --model facebook/bart-base --do_train true --fit_model_to_paraphrases true
+
+# test model
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --model roberta-base --do_train false
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --model facebook/bart-base --do_train false -n 20
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset Wikidata5m --probing_style seq2seq --model facebook/bart-base --do_train false --num_train_epochs 20 --seed 0 -n 20 --eval_paraphrase_types true --wikidata_para_per_point 4 --eval_subset wrong
+
+# LeapOfThought extra condition tests
+# implicit rule -- hypothesis
+python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --model roberta-large --do_train false --seed 0 --leapofthought_add_context_main never --leapofthought_main implicit_rule
+# property -- hypothesis + context
+python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --model roberta-large --do_train false --seed 0 --leapofthought_add_context_main eval_only --leapofthought_main property
+# implicit rule -- hypothesis + context
+python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --model roberta-large --do_train false --seed 0 --leapofthought_add_context_main eval_only --leapofthought_main implicit_rule
+
+# update beliefs
+python main.py --dataset ZSRE --do_train false --probing_style seq2seq --update_beliefs true --update_steps 10 --optimizer sgd --lr 1e-1 --num_successive_updates 1 --load_finetuned_model true --model facebook/bart-base --update_parameters all --gpu 3 --server 13
+
+python main.py --dataset FEVER --do_train false --probing_style model --update_beliefs true --update_steps 3 --num_random_other 100 --optimizer adamw --num_successive_updates 1 --load_finetuned_model true --model roberta-base --update_parameters de_cao --update_eval_truthfully true --gpu 3 
+
+python main.py --dataset LeapOfThought --leapofthought_add_context_dependent never --leapofthought_context implicit --leapofthought_main implicit_rule --probing_style model --update_beliefs true --update_steps 10 --optimizer adamw --num_successive_updates 1 --load_finetuned_model true --model roberta-large --seed 0 --update_parameters de_cao --num_random_other 400 --pre_eval true
+
+# update beliefs successively -- off the shelf optimizers
+
+python main.py --dataset ZSRE --probing_style seq2seq --update_beliefs true --update_steps 5 --optimizer adamw --lr 1e-6 --num_successive_updates 1 --load_finetuned_model true --model facebook/bart-base --update_parameters de_cao --update_eval_truthfully true --num_random_other 40
+
+python main.py --dataset FEVER --do_train false --probing_style model --update_beliefs true --update_steps 3 --num_random_other 100 --optimizer adamw --num_successive_updates 10 --load_finetuned_model true --model roberta-base --update_parameters de_cao --update_eval_truthfully true --lr 1e-4 
+
+> fever sgd
+python main.py --dataset FEVER --do_train false --probing_style model --update_beliefs true --update_steps 100 --num_random_other 100 --optimizer sgd --lr 1e-2 --load_finetuned_model true --model roberta-base --update_parameters de_cao --update_eval_truthfully true --num_successive_updates 1
+
+> fever rmsprop
+python main.py --dataset FEVER --do_train false --probing_style model --update_beliefs true --update_steps 3 --num_random_other 100 --optimizer rmsprop --lr 1e-5 --load_finetuned_model true --model roberta-base --update_parameters de_cao --update_eval_truthfully true --num_successive_updates 10
+
+# more debugging!
+
+python run_jobs.py -e task_model --seeds 1 --dataset FEVER -s
+
+# write statistics debugging!
+
+python main.py --dataset LeapOfThought --leapofthought_main implicit_rule --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --num_successive_updates 1 -gaf 1 --update_steps 5 --learned_opt_steps 5 --gpu 2 --server 17 --num_train_epochs 1 --do_train true -us --write_statistics true 
+
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --num_successive_updates 1 -gaf 1 --update_steps 5 --learned_opt_steps 5 --gpu 2 --server 17 --num_train_epochs 1 --do_train true -us --write_statistics true 
+
+python main.py --dataset Wikidata5m --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 40 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --gpu 2 --server 17 -n 20 -us --learned_opt_steps 5 --update_steps 5 --do_train false --write_statistics true
+
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --gpu 2 --server 17 -n 20 -us --learned_opt_steps 5 --update_steps 5 --do_train false --write_statistics true
+
+# k10 runs
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 16 --test_batch_size 16 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 5000 --update_steps 10 --learned_opt_steps 10 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --fit_opt_to_paraphrases true --gpu 2 --server 17
+
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --num_successive_updates 1 -gaf 1 --update_steps 10 --learned_opt_steps 10 --gpu 2 --server 17
+
+python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --num_successive_updates 1 -gaf 1 --update_steps 10 --learned_opt_steps 10 --leapofthought_main implicit_rule --gpu 1 --server 17
+
+# naming tests for r_train != r_test
+python main.py --dataset Wikidata5m --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 10 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 10 --update_steps 10 --write_statistics true --do_train false --gpu 3 --server 17 --do_train false --update_steps 15
+
+# a/b test, ind term
+
+python main.py --dataset Wikidata5m --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 16 --test_batch_size 16 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 30 --num_train_epochs 1 -nt 100 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 5 --update_steps 5 --fit_opt_to_paraphrases true --fit_opt_to_independent_propositions false --gpu 2 --server 17 -n 10000 --num_train_epochs 1 -ne 500
+
+python main.py --dataset Wikidata5m --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 16 --test_batch_size 16 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 30 --num_train_epochs 1 -nt 100 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 5 --update_steps 5 --fit_opt_to_paraphrases true --fit_opt_to_independent_propositions true --gpu 3 --server 17 -n 10000 --num_train_epochs 1 -ne 500
+
+# mem test r, ZSRE
+
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --gpu 2 --server 17 -n 3000 -ne 3000 -us --learned_opt_steps 5 --update_steps 5 --num_successive_updates 5 -gaf 5 --do_train false --write_statistics true
+
+# beam search size 5
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --gpu 3 --server 17 -n 3000 -ne 3000 --learned_opt_steps 5 --update_steps 5 --num_successive_updates 5 --beam_search_size 5 -gaf 5 --gpu 2
+
+# mem test update steps, ZSRE
+
+python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --gpu 3 --server 17 -n 3000 -ne 3000 --learned_opt_steps 5 --update_steps 5
+
+# a/b test gaf
+
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --update_steps 2 --num_successive_updates 2 -gaf 2 --gpu 0 -n 10000 --server 17
+
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 32 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true  --update_steps 2 --num_successive_updates 2 -gaf 10 --gpu 1 -n 10000 --server 17
+
+# learning optimizer -- train
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 200 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --gpu 3 --server 17 --num_train_epochs 2 --do_train false --write_statistics true 
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false
+
+> wikidata
+python main.py --dataset Wikidata5m --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 10 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 10 --update_steps 10 --write_statistics true --do_train false --gpu 2 --server 17 -n 20
+
+> wikidata + ind term
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 5000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 1 --update_steps 1 --fit_opt_to_independent_propositions true --lambda_independents_updated 1
+
+# learning optimizer -- alt labels conditions ZSRE
+> incorrect points: true labels, correct points: beam labels
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --beam_search_alt_labels false --correct_alt_labels beam
+
+> update wrong points only
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points true --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels false --update_all_points false --implementation new
+
+# learned optimizer -- train w/ update loop=3 and eval 3
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 3 --update_steps 3 --fit_opt_to_paraphrases true
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 3 --update_steps 3
+
+# learned optimizer -- CRP term and IND term
+< FEVER crp term alone 
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption true --divergences none --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3 --lambda_corruption 1
+
+< KEPLER min corruption alone
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --grad_accumulation_factor 2 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption true --divergences none --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3
+
+< KEPLER independent term alone
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --grad_accumulation_factor 2 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences none --fit_opt_to_independent_propositions true --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3
+
+< KEPLER both crp and ind terms
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --grad_accumulation_factor 2 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption true --divergences none --fit_opt_to_independent_propositions true --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3
+
+# learned optimizer -- beam labels
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 -nt 4000 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 1 --update_steps 1 --beam_search_alt_labels true
+
+# write preds for graphs to file
+fever :: --do_train false --do_eval true --update_eval_truthfully false --update_all_points true -ne 400 --num_random_other 400 --write_graph_to_file true 
+
+# graph analysis
+fever :: --do_train false --do_eval false --pre_eval false --update_eval_truthfully false --update_all_points true --do_graph_analysis true -nt 4000
+
+# Leap Of Thought conditions
+> LeapOfThought implicit knowledge condition
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-large --seed 1 --leapofthought_add_context_main never --leapofthought_main implicit_rule --leapofthought_add_context_dependent always --leapofthought_context implicit --use_learned_optimizer true --update_parameters optimizer --implementation new --fit_to_wrong_points false --fit_to_alt_labels true --update_eval_truthfully true --lr 3e-4 --pre_eval true --min_corruption false --divergences kl --num_random_other 400 --train_batch_size 32 --test_batch_size 32 --fit_opt_to_dependent_propositions true --lamba_dependents_all 1
+
+> LeapOfThought hypothesis only condition
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --implementation new  --model roberta-large --seed 0 --leapofthought_main implicit_rule --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --fit_to_alt_labels true --update_eval_truthfully true --lr 3e-4 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --train_batch_size 32 --test_batch_size 32 --fit_opt_to_dependent_propositions true --lambda_dependents_updated 1 --implementation de_cao
+
+# learning optimizer -- train + paraphrases
+python main.py --dataset ZSRE --probing_style model --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points true --train_batch_size 64 --lr 3e-4 --pre_eval false --min_corruption false --divergences kl --fit_opt_to_paraphrases true --eval_after 4 --num_random_other 2
+
+# learning optimizer -- train + dependent-propositions
+python main.py --dataset LeapOfThought --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-large --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points true --train_batch_size 64 --lr 3e-4 --pre_eval true --min_corruption false --divergences kl --fit_opt_to_dependent_propositions true --num_random_other 100 --num_train_epochs 20
+
+# SUCCESSIVE UPDATING
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 3 --update_steps 3 --num_successive_updates 2 -gaf 2 --load_successively_trained_model true 
+
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset KEPLER --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer adamw --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 20 --lambda_kl 1 --fit_to_alt_labels true --update_all_points false --implementation new --update_eval_truthfully true --learned_opt_steps 1 --update_steps 1 --num_successive_updates 2 -gaf 2 --do_train false -us
+
+# SUCCESSIVE UPDATING - ABLATION WITH FEVER
+> learned opt   k=2, r=1        no  1
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 1 -gaf 1 --detach_prev_updates false
+
+> learned opt   k=2, r=1        yes 1
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 1 -gaf 1 --detach_prev_updates true
+
+> learned opt   k=2, r=1        no  2
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 1 -gaf 2 --detach_prev_updates false
+
+> learned opt   k=2, r=1        yes 2
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 1 -gaf 2 --detach_prev_updates true
+
+> learned opt   k=2, r=2        no  2
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 2 -gaf 2 --detach_prev_updates false
+
+> learned opt   k=2, r=2        yes 2
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 2 -gaf 2 --detach_prev_updates true
+
+> learned opt, k=2, r=4!
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 32 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --learned_opt_steps 2 --update_steps 2 --num_successive_updates 4 -gaf 4 --detach_prev_updates true 
+
+# learning optimizer -- eval
+
+print([p[0,0].item() for p in model.parameters() if p.dim() == 2][-5:])
+print([p[0,0].item() for p in model.model.parameters() if p.dim() == 2][-5:])
+
+# speed tests
+python main.py --dataset FEVER --probing_style model --probe linear --model bert-large-cased --do_train true --train_batch_size 32 --fp16 true
+python main.py --dataset ZSRE --probing_style seq2seq --model facebook/bart-base --do_train true --seed 1 --fp16 true --train_batch_size 32
+
+# graph viz
+
+FEVER 3 update model
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train false --optimizer adamw --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false  --fit_to_alt_labels true  --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval false --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 10 --lambda_kl 1 --implementation new --update_eval_truthfully true --beam_search_alt_labels false --learned_opt_steps 3 --update_steps 3 --do_eval false -ne 400 --do_graph_analysis true
+
+
+
+
+-------------------------------
+de Cao replication
+
+# ZSRE QA model eval
+python -m scripts.train_bart_seq2seq_kilt --gpus 1 --num_workers 4 --total_num_updates 0
+
+# ZSRE train
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python -m scripts.train_bart_seq2seq_augmented_kilt --gpus 1 --num_workers 4 --seed 1
+
+# ZSRE eval
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python -m scripts.eval_bart_seq2seq --gpus 1 --num_workers 4 --method hyper --to 20
+
+# FEVER train
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python -m scripts.train_bert_binary_augmented_kilt --gpus 1 --num_workers 4
+
+# FEVER eval
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python -m scripts.eval_bert_binary --to 1000
+
+
+### our codebase
+
+# FEVER, eval / write_preds
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe --model roberta-base --do_train true --seed 0 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt --do_train false --write_preds_to_file true --train_batch_size 50
+
+# FEVER train
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer rmsprop --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 20 --lambda_kl 1 --load_model_path /checkpoint/peterhase/saved_models/FC_model.pt --fit_to_alt_labels true 
+# --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/FC_model.ckpt
+#  
+
+# ZSRE, eval / write_preds
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --model facebook/bart-base --do_train true --seed 0 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt --do_train false --write_preds_to_file true --train_batch_size 50
+
+# ZSRE train
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train true --optimizer rmsprop --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 1 --num_random_other 20 --num_train_epochs 40 -nt 4000  --lambda_kl 1 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt --fit_to_alt_labels true --update_all_points true
+
+# FEVER eval our model
+python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train true --optimizer rmsprop --model roberta-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --num_random_other 100 --num_train_epochs 20 --lambda_kl 1 --load_model_path /checkpoint/peterhase/saved_models/FC_model.pt --do_train false --update_all_points true --fit_to_alt_labels true --load_alt_labels_model true
+
+# FEVER eval their model
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset FEVER --probing_style model --probe linear --load_finetuned_model true --do_train false --optimizer rmsprop --model bert-base-uncased --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 20 --num_random_other 100 --num_train_epochs 100 --update_all_points true --lambda_kl 1 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/FC_model.ckpt --load_opt_path /checkpoint/peterhase/KnowledgeEditor/models/bert_binary_truthful_augmented_fever/version_9/checkpoints/model-epoch=91-valid_acc=0.3352-valid_flipped=0.388889.ckpt --do_train false --pre_eval false
+
+# ZSRE eval our model
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train false --optimizer rmsprop --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --update_all_points true --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --divergences kl --eval_after 10 --num_random_other 20 --num_train_epochs 40 -ne 2000 --lambda_kl 1 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt --update_all_points true --fit_to_alt_labels true
+
+# ZSRE eval their model
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python main.py --dataset ZSRE --probing_style seq2seq --load_finetuned_model true --do_train false --optimizer rmsprop --model facebook/bart-base --use_learned_optimizer true --update_parameters optimizer --fit_to_wrong_points false --train_batch_size 64 --test_batch_size 64 --lr 3e-4 --weight_decay 0 --pre_eval true --min_corruption false --update_all_points true --divergences kl --eval_after 10 --num_random_other 20 --num_train_epochs 40 --update_all_points true --lambda_kl 1 --load_model_path /checkpoint/peterhase/KnowledgeEditor/knowledge_editor/QA_model.ckpt --load_opt_path /checkpoint/peterhase/KnowledgeEditor/models/bart_seq2seq_paraphrases_augmented_structured_zeroshot/version_2/checkpoints/model-epoch=06-valid_acc=0.9584-valid_flipped=0.936869.ckpt --do_train false --fit_to_alt_labels true --pre_eval false
+
+
+-------------------------------
+
+# build LeapOfThought data -- use_all train condition
+python -m LeapOfThought.run -c Hypernyms -o create_new_artiset --copy_from ExampleArtiset --ariset_module soft_reasoning
+python -m LeapOfThought.run -c Hypernyms -o build_artificial_dataset --out taxonomic_reasonings.jsonl.gz -v use_all
+gunzip taxonomic_reasonings_use_all_train.jsonl.gz taxonomic_reasonings_use_all_dev.jsonl.gz taxonomic_reasonings_use_all_test.jsonl.gz taxonomic_reasonings_use_all_meta.jsonl.gz
+# write theirs
+python -m LeapOfThought.run -c Hypernyms -o build_artificial_dataset --out taxonomic_reasonings.jsonl.gz -v training_mix
+gunzip taxonomic_reasonings_training_mix_train.jsonl.gz taxonomic_reasonings_training_mix_dev.jsonl.gz taxonomic_reasonings_training_mix_test.jsonl.gz taxonomic_reasonings_training_mix_meta.jsonl.gz
+# get their implicit only
+wget https://aigame.s3-us-west-2.amazonaws.com/data/hypernyms/hypernyms_implicit_only_short_neg_hypernym_rule_dev.jsonl.gz
+wget https://aigame.s3-us-west-2.amazonaws.com/data/hypernyms/hypernyms_implicit_only_short_neg_hypernym_rule_test.jsonl.gz
+gunzip hypernyms_implicit_only_short_neg_hypernym_rule_dev.jsonl.gz hypernyms_implicit_only_short_neg_hypernym_rule_test.jsonl.gz
+# get their training mix
+wget https://aigame.s3-us-west-2.amazonaws.com/data/hypernyms/hypernyms_training_mix_short_train.jsonl.gz
+wget https://aigame.s3-us-west-2.amazonaws.com/data/hypernyms/hypernyms_explicit_only_short_neg_hypernym_rule_dev.jsonl.gz
+wget https://aigame.s3-us-west-2.amazonaws.com/data/hypernyms/hypernyms_explicit_only_short_neg_hypernym_rule_test.jsonl.gz
+gunzip hypernyms_training_mix_short_train.jsonl.gz hypernyms_explicit_only_short_neg_hypernym_rule_dev.jsonl.gz hypernyms_explicit_only_short_neg_hypernym_rule_test.jsonl.gz
+# our own implicit test...
+python -m LeapOfThought.run -c Hypernyms -o build_artificial_dataset --out taxonomic_reasonings.jsonl.gz -v no_implicit_knowledge
+gunzip taxonomic_reasonings_no_implicit_knowledge_train.jsonl.gz taxonomic_reasonings_no_implicit_knowledge_dev.jsonl.gz taxonomic_reasonings_no_implicit_knowledge_test.jsonl.gz taxonomic_reasonings_no_implicit_knowledge_meta.jsonl.gz
+
+# write independent statements
+srun --gpus-per-node 1 --tasks-per-node 1 --cpus-per-task 10 --nodes 1 --constraint volta32gb --partition learnfair --time 4000 -u python -m data_utils.make_independent_statements --dataset LeapOfThought --model EleutherAI/gpt-neo-1.3B --temperature .8 --do_sample true --use_negated_propositions true --max_filter_iters 40 --neutral_prob_threshold -1 --likelihood_filtering true --test_batch_size 2 --min_samples_per_prompt 3 -s
+
+
+
