@@ -12,7 +12,7 @@ import jsonlines
 from utils import str2bool, Report, safe_load_base_model, safe_load_final_model
 from transformers import AutoModelForSeq2SeqLM, AutoModelWithLMHead, AutoModel, AutoTokenizer
 from transformers import AdamW, get_scheduler, get_linear_schedule_with_warmup
-from torch.optim import SGD, RMSprop
+from torch.optim import SGD, RMSprop, Adam
 from torch.nn.parallel import DistributedDataParallel as DDP
 from models.probe import Probe
 from models.learned_optimizer import ModelWithLearnedOptimizer
@@ -36,7 +36,7 @@ def load_optimizer_and_scheduler(args, model, num_training_steps):
         avoid_list = ['norm', 'embeddings', 'classifier', 'pooler', 'shared', 'embed', 'positions']
         named_parameters = [(n,p) for n,p in model.named_parameters() if all([e not in n.lower() for e in avoid_list])]
     if args.update_parameters == 'optimizer':
-        named_parameters = [(n,p) for n,p in model.named_parameters() if n.startswith('learner')]
+        named_parameters = [(n,p) for n,p in model.named_parameters() if n.startswith('hypernetwork') and 'edit_lrs' not in n]
     optimizer_grouped_parameters = [
         {"params": [p for n, p in named_parameters if not any(nd in n for nd in ["bias", "LayerNorm.weight"])],
             "weight_decay": args.weight_decay,
@@ -53,7 +53,13 @@ def load_optimizer_and_scheduler(args, model, num_training_steps):
                 'lr' : 1e-1,
                 'weight_decay' : 0
             })
-    optimizer_to_class = {'adamw' : AdamW, 'sgd' : SGD, 'rmsprop' : RMSprop}
+        if args.implementation == 'mend':
+            optimizer_grouped_parameters.append({
+                'params' : [model.hypernetwork.edit_lrs],
+                'lr' : args.lr_lr,
+                'weight_decay' : 0
+            })
+    optimizer_to_class = {'adamw' : AdamW, 'sgd' : SGD, 'rmsprop' : RMSprop, 'adam' : Adam}
     optimizer_class = optimizer_to_class[args.optimizer]
     if optimizer_class is RMSprop:
         optimizer = optimizer_class(optimizer_grouped_parameters, centered=True)
@@ -61,6 +67,8 @@ def load_optimizer_and_scheduler(args, model, num_training_steps):
         optimizer = optimizer_class(optimizer_grouped_parameters)
     if args.implementation == 'de_cao' and args.use_learned_optimizer: # use this with use_learned_opt, not args.update_beliefs
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=1000, num_training_steps=200000)
+    # elif args.implementation == 'mend' and args.use_learned_optimizer:
+    #     scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=1e12)
     else:
         scheduler = get_scheduler("linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=num_training_steps)
     return (optimizer, scheduler)
@@ -84,7 +92,8 @@ def update_model(args, model, datapoint_kwargs, tokenizer):
         loss = outputs['loss']
         new_scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+        if args.max_grad_norm > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
         new_scaler.step(optimizer)
         new_scaler.update()
         optimizer.zero_grad()
@@ -192,8 +201,6 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
         model.eval()
     
     for batch_num, batch in enumerate(data_loader):
-        # if epoch_stats['n_dependent_points'] > 0:
-        #     print(args.leapofthought_main)
         running_time = (time.time()-start_time)
         est_epoch_run_time = (running_time/(batch_num+1)*n_batches)
         batch_size = batch['main_input_ids'].size(0)
@@ -203,22 +210,27 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
         # forward pass on main input. if using learned optimizer and this is the before-training eval or is_update_epoch, use the original model
         main_kwargs = {k.replace('main_', "") : v for k,v in batch.items() if any([name in k for name in ['main','paraphrases','orig_labels','dependent']]) or k=='id'}
         utils.move_kwargs_to_gpu(main_kwargs)
-        if args.use_learned_optimizer and (pre_eval or is_update_epoch): main_kwargs['use_base_model'] = True
+        if args.use_learned_optimizer and (pre_eval or is_update_epoch): 
+            main_kwargs['use_base_model'] = True
         with main_grad_req and torch.cuda.amp.autocast(enabled=args.fp16):
             begin = time.time()
             main_outputs = model(is_eval=is_eval_epoch, **main_kwargs)
             forward_time += (time.time() - begin)
 
-        # step optimizer for training a model
+        # backward() + step optimizer for training a model
         if is_train_epoch:
             loss = main_outputs['loss'] / args.grad_accumulation_factor
             if args.multi_gpu:
                 loss = loss.mean()
             retain_graph = (args.num_successive_updates > 1 and not args.detach_prev_updates)
-            scaler.scale(loss).backward(retain_graph=retain_graph)
+            if not args.safe_backward:
+                scaler.scale(loss).backward(retain_graph=retain_graph)
+            else:
+                utils.safe_backward(loss, model.parameters(), allow_unused=True)
             if (batch_num+1) % args.grad_accumulation_factor == 0 or (batch_num == n_batches-1):
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                if args.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm, error_if_nonfinite=True)
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
@@ -228,7 +240,7 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
                 del loss, main_kwargs
 
         # update stats for main batch. note that for seq prediction problems we use eligible_labels for exact-match
-        preds = main_outputs['preds']
+        preds = main_outputs['preds']        
         labels = batch['orig_labels'] if args.probing_style!='seq2seq' else [item['eligible_labels'] for item in batch['text_data']] 
         main_n_correct, main_binary_correct = metrics.compute_acc_sum(args.probing_style, preds, labels, tokenizer, return_where_correct=True)
         epoch_stats['acc_sum'] += main_n_correct
@@ -241,7 +253,7 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
         # get metrics while training the learned optimizer
         if args.use_learned_optimizer and is_train_epoch and not is_update_epoch: # used during training the optimizer, not evaluating it
             if batch_size > 1:
-                before_preds = main_outputs['all_before_preds'] # these are for the points in the batch not used to get the model grad
+                before_preds = main_outputs['all_before_preds'] # these are for the points in the batch NOT used to get the model grad
                 after_preds = main_outputs['all_after_preds']
                 all_labels = main_outputs['all_labels']
                 epoch_stats['retain_sum'] += metrics.compute_acc_sum(args.probing_style, before_preds, after_preds, tokenizer)
@@ -378,6 +390,7 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
                     update_blocks = utils.custom_chunk_array(where_update, args.num_successive_updates)
                     eval_batch = batch
                     running_updated_ids = []
+                # import pdb; pdb.set_trace()
                 
                 # get subset of other validation data. exclude data-to-be-updated from this validation data, unless writing graph to file (which needs data pairs considered)
                 exclude_ids = eval_batch['id'][where_update].tolist() if not args.write_graph_to_file else []
@@ -642,7 +655,10 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
 
         # record stats in stats_dict. first, do acc, which requires special calculation when doing update_beliefs
         n = SimpleNamespace(**epoch_stats)
-        stats_dict[f'{split_name}_acc'] = 100 * n.acc_sum / n.n_data_points
+        if not args.use_learned_optimizer:
+            stats_dict[f'{split_name}_acc'] = 100 * n.acc_sum / n.n_data_points 
+        else:
+            stats_dict[f'{split_name}_acc'] = 100 * (n.before_acc_sum / (n.n_random_other_points - eval_updated_model_counter))
         if n.n_updated > 0:                            stats_dict[f'{split_name}_upd_suc'] = 100 * n.succ_updates_sum / n.n_updated
         if n.n_paraphrase_pairs > 0:                   stats_dict[f'{split_name}_cons']    = 100 * n.consistent_sum / n.n_paraphrase_pairs
         if n.n_paraphrases > 0:                        stats_dict[f'{split_name}_par_acc'] = 100 * n.par_acc_sum / n.n_paraphrases
@@ -661,10 +677,23 @@ def train_or_test(args, stats_dict, epoch, model, data_loader, tokenizer, optimi
             stats_dict[f'{split_name}_per_det'] = 100 * (1 - (n.after_acc_sum/n.n_random_other_points) / (n.before_acc_sum/n.n_random_other_points))
         # get change in performance without computing before-update accuracies
         if n.n_random_other_points > 0:
-            if args.update_eval_truthfully or not args.update_all_points:
+            if is_eval_epoch:                
                 stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - 100 * (n.acc_sum / (n.n_data_points - eval_updated_model_counter)) # (this is exactly correct)
             else:
-                stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - stats_dict[f'{split_name}_acc'] # very slight approximation
+                stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - 100 * (n.before_acc_sum / (n.n_random_other_points - eval_updated_model_counter)) # (this is exactly correct)
+            # print("all before mean", round(np.mean(all_before_preds), 2))
+            # print("after acc sum", round(n.after_acc_sum / n.n_random_other_points, 2))
+            # print("acc sum", round(n.acc_sum / n.n_random_other_points, 2))
+            # print("before acc sum", round(n.before_acc_sum / n.n_random_other_points, 2))
+            # print(100 * n.after_acc_sum / n.n_random_other_points - 100 * np.mean(all_before_preds))
+            # print(100 * n.after_acc_sum / n.n_random_other_points - 100 * (n.acc_sum / (n.n_random_other_points - eval_updated_model_counter)))
+            # print(100 * n.after_acc_sum / n.n_random_other_points - 100 * (n.before_acc_sum / (n.n_random_other_points - eval_updated_model_counter))) # (this is exactly correct)
+            # import pdb; pdb.set_trace()
+            # if args.update_eval_truthfully or not args.update_all_points:
+            #     stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - 100 * np.mean(all_before_preds)
+            #     # stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - 100 * (n.before_acc_sum / (n.n_random_other_points - eval_updated_model_counter)) # (this is exactly correct)
+            # else:
+            #     stats_dict[f'{split_name}_per_chg'] = 100 * n.after_acc_sum / n.n_random_other_points - stats_dict[f'{split_name}_acc'] # very slight approximation
         # get change in independent performance without computing before-update accuracies -- only works for our unshuffled split of wikidata5m
         if n.n_independent_points > 0 and (args.use_learned_optimizer or is_update_epoch) and (args.update_eval_truthfully or not args.update_all_points):
             assert args.dataset == 'Wikidata5m', "this only works for our unshuffled eval splits of wikidata5m"
@@ -864,10 +893,19 @@ if __name__ == '__main__':
     parser.add_argument("--weight_decay", default=1e-4, type=float, help='')
     parser.add_argument("--fit_model_to_paraphrases", default = False, type=str2bool, help = '')
     parser.add_argument("--paraphrases_to_unique_points", default = False, type=str2bool, help = 'if data point has e.g. three paraphrases, convert it to three unique data points')
+    # hypernetwork architecture hparams
+    parser.add_argument("--mend_weight_sharing", default=True, type=str2bool)
+    parser.add_argument("--input_norm", default=True, type=str2bool, help='layernorm-like normalization for input to hypernetwork')
+    parser.add_argument("--editable_params", default='mlp_and_attention_weights', 
+                            choices=['mlp_and_attention_weights', 'config'], help='')
+    parser.add_argument("--mend_config", default='mend', 
+                            choices=['mend', 'zsre'], help='')
+    parser.add_argument("--lr_lr", default=1e-4, type=float, help='lr for the edit_lr parameters (which are one per weight), which are used to do overall update scaling')
     # training hyperparams for learned optimizer
+    parser.add_argument("--safe_backward", default=False, type=str2bool)
     parser.add_argument("--update_parameters", default='all', choices=['probe', 'biases', 'ff_neurons', 'all', 'de_cao', 'interior', 'optimizer'], help='')
-    parser.add_argument("--optimizer", default='adamw', choices=['sgd', 'adamw', 'rmsprop', 'learned', 'neuron_IG'])
-    parser.add_argument("--implementation", default='new', choices=['new', 'de_cao'])
+    parser.add_argument("--optimizer", default='adamw', choices=['sgd', 'adamw', 'rmsprop', 'learned', 'neuron_IG', 'adam'])
+    parser.add_argument("--implementation", default='ours', choices=['ours', 'de_cao', 'mend'])
     parser.add_argument("--detach_prev_updates", default = True, type=str2bool, help = '')
     parser.add_argument("--fit_to_wrong_points", default = False, type=str2bool, help = 'fit learned optimizer to wrong points only')
     parser.add_argument("--learned_opt_steps", default=1, type=int, help='number of model update steps to apply learned opt for before doing optimizer.step()')
@@ -903,7 +941,7 @@ if __name__ == '__main__':
     parser.add_argument("--update_beliefs", default = False, type=str2bool, help = 'use update_model function to update model beliefs (no learned opt)')
     parser.add_argument("--learned_successive_updates", default = -1, type=int, help = 'if > 0, used to load model with this hparam during training')
     parser.add_argument("--num_successive_updates", default = 1, type=int, help = 'evaluates model performance after this many serial updates')
-    parser.add_argument("--update_eval_truthfully", default = False, type=str2bool, help = 'forces update_all_points to false and fit_to_alt_labels to false on eval splits')
+    parser.add_argument("--update_eval_truthfully", default = True, type=str2bool, help = 'forces update_all_points to false and fit_to_alt_labels to false on eval splits')
     parser.add_argument("--eval_consistency", default = True, type=str2bool, help = '')
     parser.add_argument("--eval_paraphrase_types", default = False, type=str2bool, help = '')
     parser.add_argument("--eval_before_cons", default = False, type=str2bool, help = '')
@@ -934,7 +972,7 @@ if __name__ == '__main__':
     # parse + experiment checks
     args = parser.parse_args()
     if args.use_learned_optimizer and args.do_train: assert args.update_parameters=='optimizer', "only use learned optimizer parameters in adamw optimizer, not base model"
-    if args.use_learned_optimizer and args.do_train: assert args.lr > 1e-5, "use a higher lr for training the optimizer"
+    if args.use_learned_optimizer and args.do_train: assert args.lr >= 1e-6 and args.lr < 1, "check lr range for training the optimizer"
     if args.fit_model_to_paraphrases: assert not args.use_learned_optimizer, "use fit_opt_to_paraphrases instead of fit_model_to_paraphrases here"
     if args.do_train and args.use_learned_optimizer: assert args.update_steps >= args.learned_opt_steps, "should use dev steps >= trains steps for opt"
     assert not (args.use_learned_optimizer and args.update_beliefs), "these are mutually exclusive arguments. update_beliefs is for off-the-shelf optimizers"
@@ -942,6 +980,7 @@ if __name__ == '__main__':
     if args.learned_successive_updates > 1 and args.do_train: assert args.grad_accumulation_factor >= args.learned_successive_updates, "grad accum factor must be at least learned_successive_updates"
     if args.use_learned_optimizer and args.num_successive_updates > 1 and args.do_train:
         print("\nNote that train update success is NOT calculated after num_successive_updates, but rather after every single update, so not comparable to dev upd_suc \n")
+    if args.implementation == 'mend': assert args.editable_params == 'config'
 
     # add dataset-specific parameters to args
     utils.add_dataset_config_to_args(args, args.dataset)
@@ -949,6 +988,9 @@ if __name__ == '__main__':
     if args.server == '17':
         for attr in ['save_dir', 'cache_dir', 'data_dir']:
             setattr(args, attr, getattr(args, attr).replace("playpen3", "playpen-ssd"))
+    if args.server == '13':
+        for attr in ['save_dir', 'cache_dir', 'data_dir']:
+            setattr(args, attr, getattr(args, attr).replace("playpen-ssd", "playpen3"))
 
     # init experiment name, Report, stats_dict, and saving/loading paths
     experiment_name = utils.add_experiment_name_to_args(args) # note this both returns experiment_name and adds it AND base_experiment_name to args
@@ -956,7 +998,7 @@ if __name__ == '__main__':
         with open('outputs/tmp_experiment_name.txt', 'w') as file: file.write(experiment_name)
         sys.exit()
     print(f"Starting experiment: {experiment_name} \n")
-    report_name = f"report_{experiment_name}.txt"
+    report_name = f"{experiment_name}.txt"
     report_file = os.path.join(args.report_dir, report_name)
     score_names = args.dataset_config['stat_names']
     report = Report(args, report_file, experiment_name = experiment_name, score_names = score_names, overwrite_existing=args.do_train or args.update_beliefs)

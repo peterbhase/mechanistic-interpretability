@@ -15,6 +15,60 @@ import metrics
 import itertools
 from models.probe import Probe
 from models.learned_optimizer import ModelWithLearnedOptimizer
+import yaml
+
+def safe_backward(loss, parameters, allow_unused=True):
+    parameters = list(parameters)  # Capture the generator output
+    grads = torch.autograd.grad(loss, parameters, allow_unused=allow_unused)
+    nan, inf = False, False
+    for g in grads:
+        if g is not None:
+            nan |= g.isnan().any().item()
+            inf |= g.isinf().any().item()
+        # if nan or inf:
+        #     print(g)
+        #     print(torch.where(g.isnan()))
+        #     print(torch.where(g.isinf()))
+        #     print(g.shape)
+        #     import pdb; pdb.set_trace()
+
+    if not (nan or inf):
+        for p, g in zip(parameters, grads):
+            if g is None:
+                continue
+
+            if p.grad is None:
+                p.grad = g
+            else:
+                p.grad += g
+    else:
+        print(f"Skipping grad accumulation because inf: {inf} nan: {nan}")
+
+def add_yaml_to_args(args, path):
+    config = yaml.safe_load(open(path,'r'))
+    args.__dict__.update(config)
+    return args
+
+class LabelSmoothingLoss(torch.nn.Module):
+    def __init__(self, classes, smoothing=0.0, dim=-1, ignore_index=-100):
+        super(LabelSmoothingLoss, self).__init__()
+        self.confidence = 1.0 - smoothing
+        self.smoothing = smoothing
+        self.cls = classes
+        self.dim = dim
+        self.ignore_index=ignore_index
+
+    def forward(self, pred, target, use_smoothing=True):
+        pred = pred.log_softmax(dim=self.dim)
+        with torch.no_grad():
+            # get ignore_index positions then replace this with 0 -- will ignore this later
+            where_ignore = torch.where((target==self.ignore_index).view(-1))[0]
+            target.masked_fill_(target==self.ignore_index, 0)
+            true_dist = torch.zeros_like(pred)
+            true_dist.fill_(self.smoothing / (self.cls - 1))
+            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
+            true_dist[where_ignore,:] = 0 # set to 0 to ignore this term in the sum below
+        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
 def add_df_cols_from_args(df, args, cols):
     for col in cols:
@@ -401,11 +455,11 @@ def get_experiment_name(args):
     if args.load_model_path:
         return args.load_model_path.split('/')[-1].replace(".pt", "").replace(".ckpt", "")
     if args.do_train:
-        trained_or_updated = f'finetuned-{args.update_parameters}'
+        trained_or_updated = f'{args.update_parameters}-tuned'
     else:
         trained_or_updated = 'pretrained'
     if args.load_finetuned_model:
-        trained_or_updated = f'finetuned-{args.orig_trained_parameters}'
+        trained_or_updated = f'{args.orig_trained_parameters}-tuned'
     model_name = args.model.replace('facebook/', '')
     probe = args.probe if args.probing_style == 'model' else args.probing_style
     # additional objectives
@@ -417,20 +471,21 @@ def get_experiment_name(args):
     else:
         data_addin = ''
     seed = args.seed if args.load_seed < 0 else args.load_seed
-    return f"experiment_{model_name}_{args.dataset}_{probe}-probe_{trained_or_updated}{paraphrases}_sd{seed}{data_addin}"
+    return f"{args.dataset}_{model_name}_{probe}_{trained_or_updated}{paraphrases}_sd{seed}{data_addin}"
 
 def get_experiment_name_learned_opt(args):
     # get experiment name for training learned optimizer
     experiment_name = get_experiment_name(args)
-    learned_opt_or_update_cond = "_learned-opt"
-    if args.implementation == 'de_cao': learned_opt_or_update_cond += '-de-cao'
-    if args.implementation == 'new'   : learned_opt_or_update_cond += '-ours'
+    learned_opt_or_update_cond = "_"
+    if args.implementation == 'de_cao':  learned_opt_or_update_cond += 'de-cao'
+    if args.implementation == 'ours'   : learned_opt_or_update_cond += 'ours'
+    if args.implementation == 'mend'   : learned_opt_or_update_cond += 'mend'
     learned_opt_or_update_cond += f"_k{args.learned_opt_steps}"
     learned_opt_or_update_cond += f'_r{args.learned_successive_updates}' if args.learned_successive_updates > -1 else f"_r1"
     # give objective
     objective = '_obj-ce'
     if args.min_corruption:         objective += '-crp'
-    if args.divergences == 'kl':    objective += '-kl'
+    if args.divergences == 'kl':    objective += f'-kl{args.lambda_kl}'
     if args.fit_opt_to_dependent_propositions:  
         objective += '-dep'
         if args.leapofthought_add_both_for_training:
@@ -445,13 +500,14 @@ def get_experiment_name_learned_opt(args):
         data_addin = f"_n{args.num_train_points}"
     else:
         data_addin = ''
-    if args.fit_to_alt_labels or args.load_alt_labels_model:
-        alt_labels = '_alt-labels' 
-    else:
-        alt_labels = ''
-    if args.beam_search_alt_labels:
-        alt_labels += '-beam'
-    experiment_name = f"{experiment_name}{learned_opt_or_update_cond}{objective}{alt_labels}_opt-{args.optimizer}_sd{args.seed}{data_addin}"
+    # if args.fit_to_alt_labels or args.load_alt_labels_model:
+    #     alt_labels = '_alt-labels' 
+    # else:
+    #     alt_labels = ''
+    # if args.beam_search_alt_labels:
+    #     alt_labels += '-beam'
+    # experiment_name = f"{experiment_name}{learned_opt_or_update_cond}{objective}{alt_labels}_opt-{args.optimizer}_sd{args.seed}{data_addin}"
+    experiment_name = f"{experiment_name}{learned_opt_or_update_cond}{objective}_sd{args.seed}{data_addin}"
     return experiment_name
 
 def args_to_obj_name(args):

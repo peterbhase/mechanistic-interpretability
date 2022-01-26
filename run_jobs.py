@@ -241,7 +241,7 @@ def base_optimizers_r_main(args):
 
 def learned_opt_main(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true --update_steps 5 --learned_opt_steps 5 "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl  "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})
@@ -259,7 +259,7 @@ def learned_opt_main(args):
 
 def learned_opt_eval_ablation(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true --update_steps 5 --learned_opt_steps 5 "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl  "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})
@@ -286,7 +286,7 @@ def learned_opt_eval_ablation(args):
 
 def learned_opt_k_ablation(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl "
     override = f" --divergences kl --fit_opt_to_paraphrases false --fit_opt_to_dependent_propositions false --fit_opt_to_independent_propositions false --lambda_kl 1 "
     max_num_updates = [1, 2, 4, 6, 8, 10]
@@ -319,7 +319,7 @@ def learned_opt_k_ablation(args):
 
 def learned_opt_r_main(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})
@@ -356,7 +356,7 @@ def learned_opt_r_main(args):
 
 def learned_opt_r_ablation(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl "
     override = f" --divergences kl --fit_opt_to_paraphrases false --fit_opt_to_dependent_propositions false --fit_opt_to_independent_propositions false --lambda_kl 1 "
     num_successive_updates = [1, 2, 4, 6, 8, 10]
@@ -400,7 +400,7 @@ def learned_opt_r_ablation(args):
 
 def learned_opt_objective_ablation(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true --update_steps 5 --learned_opt_steps 5 "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl  "
     objective_conditions_to_datasets = {
             '--divergences none --fit_opt_to_paraphrases false --fit_opt_to_independent_propositions false --fit_opt_to_dependent_propositions false' : ['FEVER'],
@@ -433,7 +433,7 @@ def learned_opt_objective_ablation(args):
 
 def learned_opt_label_ablation(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true --update_steps 5 --learned_opt_steps 5 "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl  "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})
@@ -458,7 +458,7 @@ def learned_opt_label_ablation(args):
 
 def learned_opt_de_cao(args):
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true  "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})
@@ -482,7 +482,7 @@ def learned_opt_de_cao(args):
 def learned_opt_sample_efficiency(args):
     # doesn't save the models, currently. 
     command = f"python main.py --train_batch_size 16 --test_batch_size 16 --load_finetuned_model true --use_learned_optimizer true --update_steps 5 --learned_opt_steps 5 "\
-              f" --update_parameters optimizer --update_eval_truthfully true --implementation new --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
+              f" --update_parameters optimizer --update_eval_truthfully true --implementation ours --leapofthought_main implicit_rule --leapofthought_add_both_for_training true "\
               f" --lr 3e-4 --weight_decay 0 --fit_to_alt_labels true --divergences kl  "
     data_stats = pd.DataFrame({'dataset' : [], 'seed' : [], 'id' : []})
     summary_stats = pd.DataFrame({'dataset' : [], 'seed' : []})

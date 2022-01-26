@@ -1,0 +1,23 @@
+alg: mend
+train_base: False
+edit_lr: 1e-4
+mend:
+  one_sided: False
+  n_hidden: 1
+  hidden_dim: null
+  init: id
+  norm: False
+  combine: True
+  x_only: False
+  delta_only: False
+  act: relu
+  rank: 1920
+  mlp_class: IDMLP
+  shared: True
+editable_params:
+- model.encoder.layer.9.intermediate.dense.weight
+- model.encoder.layer.9.output.dense.weight
+- model.encoder.layer.10.intermediate.dense.weight
+- model.encoder.layer.10.output.dense.weight
+- model.encoder.layer.11.intermediate.dense.weight
+- model.encoder.layer.11.output.dense.weight

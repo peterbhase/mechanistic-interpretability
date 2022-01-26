@@ -11,183 +11,11 @@ from copy import deepcopy
 import time
 from allennlp.modules.feedforward import FeedForward
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
-from higher.patch import monkeypatch as make_functional
 import metrics
 import utils
-
-class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes, smoothing=0.0, dim=-1, ignore_index=-100):
-        super(LabelSmoothingLoss, self).__init__()
-        self.confidence = 1.0 - smoothing
-        self.smoothing = smoothing
-        self.cls = classes
-        self.dim = dim
-        self.ignore_index=ignore_index
-
-    def forward(self, pred, target, use_smoothing=True):
-        pred = pred.log_softmax(dim=self.dim)
-        with torch.no_grad():
-            # get ignore_index positions then replace this with 0 -- will ignore this later
-            where_ignore = torch.where((target==self.ignore_index).view(-1))[0]
-            target.masked_fill_(target==self.ignore_index, 0)
-            true_dist = torch.zeros_like(pred)
-            true_dist.fill_(self.smoothing / (self.cls - 1))
-            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
-            true_dist[where_ignore,:] = 0 # set to 0 to ignore this term in the sum below
-        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
-
-class ConditionedParameter(torch.nn.Module):
-    def __init__(self, parameter, condition_dim=1024, hidden_dim=128, max_scale=1):
-        super().__init__()
-        self.parameter_shape = parameter.shape
-
-        if len(self.parameter_shape) == 2:
-            self.conditioners = torch.nn.Sequential(
-                torch.nn.utils.weight_norm(torch.nn.Linear(condition_dim, hidden_dim)),
-                torch.nn.Tanh(),
-                torch.nn.utils.weight_norm(
-                    torch.nn.Linear(
-                        hidden_dim, 2 * (parameter.shape[0] + parameter.shape[1]) + 1
-                    )
-                ),
-            )
-        elif len(self.parameter_shape) == 1:
-            self.conditioners = torch.nn.Sequential(
-                torch.nn.utils.weight_norm(torch.nn.Linear(condition_dim, hidden_dim)),
-                torch.nn.Tanh(),
-                torch.nn.utils.weight_norm(
-                    torch.nn.Linear(hidden_dim, 2 * parameter.shape[0] + 1)
-                ),
-            )
-        else:
-            raise RuntimeError()
-
-        self.max_scale = max_scale
-
-    def forward(self, inputs, grad):
-
-        if len(self.parameter_shape) == 2:
-            (
-                conditioner_cola,
-                conditioner_rowa,
-                conditioner_colb,
-                conditioner_rowb,
-                conditioner_norm,
-            ) = self.conditioners(inputs).split(
-                [
-                    self.parameter_shape[1],
-                    self.parameter_shape[0],
-                    self.parameter_shape[1],
-                    self.parameter_shape[0],
-                    1,
-                ],
-                dim=-1,
-            )
-
-            a = conditioner_rowa.softmax(-1).T @ conditioner_cola
-            b = conditioner_rowb.softmax(-1).T @ conditioner_colb
-
-        elif len(self.parameter_shape) == 1:
-            a, b, conditioner_norm = self.conditioners(inputs).split(
-                [self.parameter_shape[0], self.parameter_shape[0], 1], dim=-1
-            )
-        else:
-            raise RuntimeError()
-
-        new_grad = (self.max_scale
-            * conditioner_norm.sigmoid().squeeze()
-            * (grad * a.squeeze() + b.squeeze()))
-
-        return new_grad
-
-
-class LSTMConditioner(torch.nn.Module):
-    def __init__(
-        self,
-        vocab_dim=30522,
-        embedding_dim=768,
-        hidden_dim=256,
-        output_dim=1024,
-        embedding_init=None,
-    ):
-        super().__init__()
-        self.embedding = torch.nn.Embedding(
-            num_embeddings=vocab_dim,
-            embedding_dim=embedding_dim,
-            padding_idx=0,
-            _weight=embedding_init,
-        )
-        self.lstm = PytorchSeq2VecWrapper(
-            torch.nn.LSTM(
-                input_size=embedding_dim,
-                hidden_size=hidden_dim,
-                num_layers=1,
-                bidirectional=True,
-                batch_first=True,
-            )
-        )
-        self.linear = FeedForward(
-            input_dim=hidden_dim * 2,
-            num_layers=1,
-            hidden_dims=[output_dim],
-            activations=[torch.nn.Tanh()],
-        )
-
-    def forward(self, inputs, masks):
-        return self.linear(self.lstm(self.embedding(inputs), masks))
-
-
-class HyperNetwork(torch.nn.Module):
-    def __init__(
-        self,
-        model,
-        vocab_dim=30522,
-        embedding_dim=768,
-        hidden_dim=128,
-        condition_dim=1024,
-        include_set={},
-        max_scale=1e-3,
-        embedding_init=None,
-    ):
-        super().__init__()
-
-        self.param2conditioner_map = {
-            n: "{}_conditioner".format(n).replace(".", "_")
-            for n, p in model.named_parameters()
-            if n in include_set
-        }
-
-        self.conditioners = torch.nn.ModuleDict(
-            {
-                self.param2conditioner_map[n]: ConditionedParameter(
-                    p,
-                    condition_dim,
-                    hidden_dim,
-                    max_scale=max_scale,
-                )
-                for n, p in model.named_parameters()
-                if n in include_set
-            }
-        )
-
-        self.condition = LSTMConditioner(
-            vocab_dim,
-            embedding_dim,
-            hidden_dim,
-            condition_dim,
-            embedding_init=embedding_init,
-        )
-
-    def forward(self, inputs, masks, grads=None):
-        condition = self.condition(inputs, masks)
-        return {
-            p: self.conditioners[self.param2conditioner_map[p]](
-                condition,
-                grad=grads[p] if grads else None,
-            )
-            for p, c in self.param2conditioner_map.items()
-        }
-
+import yaml
+from models.KnowledgeEditor import HyperNetwork
+from models.MEND import MENDNet
 
 class ModelWithLearnedOptimizer(nn.Module):
 
@@ -203,54 +31,80 @@ class ModelWithLearnedOptimizer(nn.Module):
         self.hparams.margin_kl_min = 1e-5
         self.hparams.margin_lp_max = 1e-3
         self.hparams.margin_lp_min = 1e-7
-        self.hparams.p = 2
         self.hparams.max_scale = 1
         self.hparams.use_views = True
         self.successive_updates_counter = 0 # used to keep track of successive_updates currently, to never exceed self.args.num_successive_updates
         self.running_update_dict = None # used with successive_updating
         embeds = self.model.model.embeddings.word_embeddings.weight.data if args.probing_style != 'seq2seq' else self.model.model.model.shared.weight.data
-        self.learner = HyperNetwork(
-            self.model,
-            vocab_dim= self.tokenizer.vocab_size,
-            embedding_dim=self.model.model.config.hidden_size,
-            hidden_dim=128,
-            condition_dim=1024,
-            include_set={
-                n
-                for n, _ in self.model.named_parameters()
-                if all(
-                    e not in n.lower()
-                    for e in (
-                        "bias",
-                        "norm",
-                        "embeddings",
-                        "classifier",
-                        "pooler",
-                        "shared",
-                        "embed",
-                        "positions",
+        # define edit params, note these can be filtered later based on config
+        if args.editable_params == 'mlp_and_attention_weights':
+            editable_params = {
+                    n
+                    for n, _ in self.model.named_parameters()
+                    if all(
+                        e not in n.lower()
+                        for e in (
+                            "bias",
+                            "norm",
+                            "embeddings",
+                            "classifier",
+                            "pooler",
+                            "shared",
+                            "embed",
+                            "positions",
+                        )
                     )
-                )
-            },
-            max_scale=self.hparams.max_scale,
-            embedding_init=embeds
-        )
-        # alpha_kl used when self.args.implementation == 'de_cao'
-        self.alpha_kl = torch.nn.Parameter(torch.ones(()))
-        self.alpha_kl.register_hook(lambda grad: -grad)
-        self.register_buffer("margin_kl", torch.tensor(self.hparams.margin_kl_max))
+                }
+        if args.implementation in ['ours', 'de_cao']:
+            self.hypernetwork = HyperNetwork(
+                self.model,
+                vocab_dim= self.tokenizer.vocab_size,
+                embedding_dim=self.model.model.config.hidden_size,
+                hidden_dim=128,
+                condition_dim=1024,
+                include_set=editable_params,
+                max_scale=self.hparams.max_scale,
+                embedding_init=embeds,
+                args=args
+            )
+        if args.implementation == 'mend':
+            config = yaml.safe_load(open(f'config/{args.mend_config}.yaml','r'))
+            if 'editable_params' in config and args.editable_params == 'config':
+                editable_params = config['editable_params']            
+            self.hypernetwork = MENDNet(
+                model=self.model,
+                args=args,
+                config=config,
+                edit_lr=float(config['edit_lr']),
+                editable_params=editable_params
+            )
+            args.config = config
+        if args.implementation == 'de_cao':
+            self.alpha_kl = torch.nn.Parameter(torch.ones(()))
+            self.alpha_kl.register_hook(lambda grad: -grad)
+            self.register_buffer("margin_kl", torch.tensor(self.hparams.margin_kl_max))
         if args.probing_style == 'seq2seq' and self.args.implementation == 'de_cao':
-            self.loss = LabelSmoothingLoss(classes=tokenizer.vocab_size, smoothing=.1, ignore_index=-100)
+            self.loss = utils.LabelSmoothingLoss(classes=tokenizer.vocab_size, smoothing=.1, ignore_index=-100)
         else:
             self.loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.CE_loss = nn.CrossEntropyLoss(ignore_index=-100)
         self.kl_loss = nn.KLDivLoss(reduction='batchmean', log_target=True)
 
-        # for param_name in self.learner.conditioners.keys():
-        #     param = self.learner.conditioners[param_name]
+        # for param_name in self.hypernetwork.conditioners.keys():
+        #     param = self.hypernetwork.conditioners[param_name]
         #     sum_sizes = sum([np.prod(p.shape) for p in param.parameters()])
         #     print(f"{param_name:50s} : {sum_sizes:8d}")
         #     print(f"     orig size: {np.prod(param.parameter_shape):30d}")
+
+        if self.args.implementation == 'mend':
+            for param_name in self.hypernetwork.mend.keys():
+                param = self.hypernetwork.mend[param_name]
+                sub_names_to_sizes = {n : np.prod(p.shape) for n, p in param.named_parameters()}
+                sum_sizes = sum(sub_names_to_sizes.values())
+                print(f"{param_name:50s}")
+                # for sub_name, size in sub_names_to_sizes.items():
+                #     print(f"     {sub_name}: {size/1e3:.0f}k")
+                print(f"     total size: {sum_sizes/1e6:.1f}m")
         
     def get_updated_model(self):
         assert self.running_update_dict is not None, "asking for updating model without any updates performed"
@@ -259,29 +113,37 @@ class ModelWithLearnedOptimizer(nn.Module):
         updated_model.load_state_dict(new_params, strict=False)
         return updated_model
 
-    def compute_param_update(self, logits, single_point_kwargs, current_update_dict=None):
+    def compute_param_update(self, logits, single_point_kwargs, current_update_dict=None, fmodel=None):
         # compute the original model's grad on a single point given the logits predicted for that point, or use use_model if it is supplied
         # returns params_dict of form {name : param_update} for name, param in model.named_parameters()
+        
+        # get loss
         if self.args.probing_style == 'seq2seq':
             labels = single_point_kwargs['labels'][:,1:]
             loss = torch.nn.CrossEntropyLoss()(logits.view(-1, logits.size(-1)), labels.reshape(-1))
         else:
             labels = single_point_kwargs['labels'] 
             loss = torch.nn.CrossEntropyLoss()(logits, labels)
-        grads = torch.autograd.grad(
-            loss,
-            self.model.parameters(),
-            allow_unused=True,
-        )
-        grads = {
-            name: grad
-            for (name, _), grad in zip(self.model.named_parameters(), grads)
-        }
-        params_dict = self.learner(
-            single_point_kwargs["opt_context_input_ids"],
-            single_point_kwargs["opt_context_attention_mask"],
-            grads=grads,
-        )
+
+        # get params_dict, which contains the new gradient
+        if self.args.implementation in ['ours', 'de_cao']:
+            grads = torch.autograd.grad(
+                loss,
+                self.model.parameters(),
+                allow_unused=True,
+            )
+            grads = {
+                name: grad
+                for (name, _), grad in zip(self.model.named_parameters(), grads)
+            }
+            params_dict = self.hypernetwork(
+                single_point_kwargs["opt_context_input_ids"],
+                single_point_kwargs["opt_context_attention_mask"],
+                grads=grads,
+            )
+        elif self.args.implementation == 'mend':        
+            params_dict = self.hypernetwork(loss)
+
         if current_update_dict is not None:
             # split by whether we detach prev updates. this determines whether backprop of Loss at update step T is wrt all T hypernetwork outputs or just the most recent output
             # detaching is default behavior
@@ -315,6 +177,9 @@ class ModelWithLearnedOptimizer(nn.Module):
                 init_use_params = [self.running_update_dict.get(n, 0) + p for n, p in self.model.named_parameters()]
             else:
                 init_use_params = [p for n, p in self.model.named_parameters()]
+            # IF USING MEND, ADD MODEL HOOKS BEFORE FORWARD PASS
+            if self.args.implementation == 'mend':
+                self.hypernetwork.add_hooks_to_fmodel(fmodel)
             orig_outputs = fmodel(
                 is_eval=False,
                 **input_kwargs,
@@ -385,9 +250,12 @@ class ModelWithLearnedOptimizer(nn.Module):
 
             # get new params. run new model on the entire batch
             param_update_dict = self.compute_param_update(single_point_logits, single_point, 
-                                                          current_update_dict=self.running_update_dict)
+                                                          current_update_dict=self.running_update_dict, fmodel=fmodel)
             self.running_update_dict = param_update_dict
             fmodel = make_functional(self.model).eval()
+            # IF USING MEND, ADD MODEL HOOKS BEFORE FORWARD PASS
+            if self.args.implementation == 'mend':
+                self.hypernetwork.add_hooks_to_fmodel(fmodel)
             input_kwargs = {k:v for k,v in kwargs.items() if k in ['input_ids', 'attention_mask', 'labels', 'decoder_input_ids']}
             new_outputs = fmodel(
                 is_eval=False,
